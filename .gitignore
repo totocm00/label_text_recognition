@@ -1,0 +1,25 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.swp
+
+# Virtual environment
+w_all/
+.venv/
+env/
+
+# Data / Model Artifacts
+datasets/
+runs/
+results/
+outputs/
+weights/
+checkpoints/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
