@@ -23,3 +23,36 @@ checkpoints/
 # OS
 .DS_Store
 Thumbs.db
+
+# images
+*.jpeg
+*.jpg
+*.png
+*.bmp
+*.tiff
+*.gif
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.wmv
+*.flv
+*.m4v
+*.mp3
+*.wav
+*.ogg
+*.flac
+*.npy
+*.json
+*.csv
+
+# venv files
+venv/
+ENV/
+env/
+.idea/
+.vscode/
+*.log
+*.out
+test-3.10/
