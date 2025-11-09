@@ -7,7 +7,7 @@ from paddleocr import PaddleOCR
 
 # ------------------- 상수 설정 -------------------
 # 카메라 장치 번호 (매직 넘버)
-CAMERA_ID = 6      # 0 또는 4 사용, 필요하면 여기만 바꿔
+CAMERA_ID = 0      # 0 또는 4 사용, 필요하면 여기만 바꿔
 
 # 해상도
 FRAME_WIDTH = 960

@@ -5,9 +5,10 @@ __pycache__/
 *.swp
 
 # Virtual environment
-w_all/
+tester/
 .venv/
 env/
+
 
 # Data / Model Artifacts
 datasets/
