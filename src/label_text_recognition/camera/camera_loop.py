@@ -1,7 +1,13 @@
 # ==========================================================
-# 웹캠을 열고, 사용자가 SPACE를 누를 때마다 현재 프레임을 캡처해서
-# OCR을 수행한 뒤 이미지/JSON으로 저장하는 메인 루프입니다.
-# 설정은 전부 YAML에서 불러오므로 코드 안에 매직 넘버를 거의 쓰지 않습니다.
+# camera_loop 모듈
+# 실시간 웹캠 화면을 띄워두고,
+# 사용자가 [SPACE]를 누를 때마다 현재 프레임에 대해 OCR을 수행한 뒤
+# 원본 이미지 / 시각화 이미지 / JSON 결과를 저장하는 데모입니다.
+#
+# 특징
+# - 설정은 전부 ocr_config.yaml 에서 가져옵니다.
+# - camera_index 가 "auto" 여도 동작하도록 camera_initializer 를 사용합니다.
+# - 흐림(선명도) 점수와 OCR 신뢰도를 같이 출력해줍니다.
 # ==========================================================
 
 import os
@@ -12,11 +18,12 @@ from label_text_recognition.config.loader import load_ocr_config
 from label_text_recognition.ocr.ocr_engine import build_ocr_engines
 from label_text_recognition.ocr.ocr_runner import run_ocr_on_image
 from label_text_recognition.exporters.json_exporter import export_to_json
+from label_text_recognition.camera.camera_initializer import init_camera  # ← auto 처리 포함된 초기화기
 
 
 def get_definition_score(frame):
     """
-    입력 프레임의 선명도를 대략적으로 계산합니다.
+    프레임의 '선명도(blur 정도)'를 대략적으로 계산합니다.
     값이 클수록 선명한 이미지입니다.
     """
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -26,81 +33,86 @@ def get_definition_score(frame):
 
 def start_camera_ocr() -> None:
     """
-    카메라를 열어서 실시간 OCR 데모를 실행합니다.
-    SPACE 입력 시 OCR 수행, q 입력 시 종료합니다.
+    실시간 카메라 OCR 데모 진입점.
+    [SPACE] → OCR 실행
+    [q]     → 종료
     """
+    # ------------------------------------------------------
+    # 1. 설정 불러오기
+    # ------------------------------------------------------
     cfg = load_ocr_config()
 
-    # ----------------------------------------------------------
-    # 설정 불러오기
-    # ----------------------------------------------------------
-    camera_id = cfg.get("camera_index", 0)
-    frame_w = cfg.get("frame_width", 960)
-    frame_h = cfg.get("frame_height", 540)
     conf_threshold = cfg.get("conf_threshold", 0.5)
     definition_threshold = cfg.get("definition_threshold", 200)
-    cls_enable = cfg.get("ocr_cls_enable", True)  # ← 방향 보정 ON/OFF
+    cls_enable = cfg.get("ocr_cls_enable", True)
 
-    # 저장 경로들
-    out_img_dir = cfg.get("output_dir_images", "assets/pictures")                 # 박스 그려진 이미지
+    # 결과 저장 경로
+    out_img_dir = cfg.get("output_dir_images", "assets/pictures")                  # OCR 박스 그려진 이미지
     out_img_origin_dir = cfg.get("output_dir_images_origin", "assets/pictures-origin")  # 원본 이미지
     out_json_dir = cfg.get("output_dir_json", "assets/json")
     os.makedirs(out_img_dir, exist_ok=True)
     os.makedirs(out_img_origin_dir, exist_ok=True)
     os.makedirs(out_json_dir, exist_ok=True)
 
-    # OCR 엔진 준비
+    # ------------------------------------------------------
+    # 2. OCR 엔진 준비 (언어 여러 개 설정 가능)
+    # ------------------------------------------------------
     ocr_langs = cfg.get("ocr_langs", ["en"])
     ocr_engines = build_ocr_engines(ocr_langs)
-    main_lang = ocr_langs[0]
-    main_engine = ocr_engines[main_lang]
+    main_engine = ocr_engines[ocr_langs[0]]  # 첫 번째 언어를 메인으로 사용
 
-    # ----------------------------------------------------------
-    # 카메라 열기
-    # ----------------------------------------------------------
-    cap = cv2.VideoCapture(camera_id)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_w)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, frame_h)
-
-    if not cap.isOpened():
-        print(f"❌ 카메라 {camera_id} 를 열 수 없습니다.")
+    # ------------------------------------------------------
+    # 3. 카메라 열기 (auto 지원되는 초기화기 사용)
+    #    → 여기서 이미 "감지된 카메라 인덱스: [...]" 가 출력됨
+    # ------------------------------------------------------
+    cap = init_camera(cfg)
+    if cap is None:
+        print("❌ 카메라를 열 수 없어 프로그램을 종료합니다.")
         return
 
     font = cv2.FONT_HERSHEY_SIMPLEX
     print("✅ Camera OCR ready. [SPACE] 캡처+OCR, [q] 종료")
 
-    # ----------------------------------------------------------
-    # 메인 루프
-    # ----------------------------------------------------------
+    # ------------------------------------------------------
+    # 4. 메인 루프
+    # ------------------------------------------------------
     while True:
         ret, frame = cap.read()
         if not ret:
-            print("⚠️ 프레임을 읽을 수 없습니다.")
+            print("⚠️ 프레임을 읽을 수 없습니다. 카메라 상태를 확인하세요.")
             break
 
+        # 화면에 안내 문구 표시
         display = frame.copy()
-        cv2.putText(display, "Press [SPACE] to OCR, [q] to quit",
-                    (10, 30), font, 0.6, (255, 255, 255), 2)
+        cv2.putText(
+            display,
+            "Press [SPACE] to OCR, [q] to quit",
+            (10, 30),
+            font,
+            0.6,
+            (255, 255, 255),
+            2,
+        )
         cv2.imshow("Label Text Recognition - Camera", display)
 
         key = cv2.waitKey(1) & 0xFF
+
+        # 종료
         if key == ord("q"):
             break
 
-        if key == 32:  # SPACE
+        # --------------------------------------------------
+        # SPACE 눌렀을 때 OCR 수행
+        # --------------------------------------------------
+        if key == 32:  # 32 == spacebar
             ts = time.strftime("%Y%m%d_%H%M%S")
             print(f"\n📸 캡처 {ts} → OCR 중...")
 
-            # ----------------------------------------------------------
-            # ① 이미지 선명도 측정
-            # ----------------------------------------------------------
+            # 4-1) 선명도 측정
             def_score = get_definition_score(frame)
             print(f"🔎 Definition score: {def_score:.2f}")
 
-            # ----------------------------------------------------------
-            # ② OCR 실행 (결과 + 시각화 + 메시지)
-            #    cls_enable 은 YAML에서 제어
-            # ----------------------------------------------------------
+            # 4-2) OCR 실행
             results, vis_img, msg = run_ocr_on_image(
                 frame.copy(),
                 main_engine,
@@ -108,50 +120,50 @@ def start_camera_ocr() -> None:
                 cls_enable,
             )
 
-            # ----------------------------------------------------------
-            # ③ 결과 저장 (원본 + 시각화 + JSON)
-            # ----------------------------------------------------------
+            # 4-3) 결과 저장
             img_path_origin = os.path.join(out_img_origin_dir, f"capture_{ts}.jpg")
             img_path = os.path.join(out_img_dir, f"capture_{ts}.jpg")
             json_path = os.path.join(out_json_dir, f"capture_{ts}.json")
 
-            # 원본 저장
+            # 원본
             cv2.imwrite(img_path_origin, frame)
-            # 시각화본 저장
+            # 박스 그린 이미지
             cv2.imwrite(img_path, vis_img)
-            # JSON 저장
+            # JSON
             export_to_json(results, json_path)
 
-            print(f"✅ 저장됨:\n- 원본:   {img_path_origin}\n- 이미지: {img_path}\n- JSON:   {json_path}")
+            print(
+                "✅ 저장됨:\n"
+                f"- 원본:   {img_path_origin}\n"
+                f"- 이미지: {img_path}\n"
+                f"- JSON:   {json_path}"
+            )
 
-            # ----------------------------------------------------------
-            # ④ 결과 분석 및 상태 출력
-            # ----------------------------------------------------------
+            # 4-4) 결과 출력/판단
             if msg.startswith("ERROR"):
                 print(f"❌ OCR 처리 중 오류 발생: {msg}")
                 continue
 
             if not results:
-                # 원인 분석 (흐림 / 글자 없음)
+                # 결과가 비어 있을 때 원인 안내
                 if def_score < definition_threshold:
                     print(f"⚠️ OCR 결과가 비어 있습니다. (원인: 흐림 / Definition {def_score:.2f})")
                 else:
                     print(f"⚠️ OCR 결과가 비어 있습니다. ({msg})")
                 continue
 
-            # 정상 결과 처리
+            # 텍스트별로 출력
             for r in results:
                 text = r.get("text", "")
                 avg_conf = r.get("avg_conf", 0.0)
                 print(f"- {text} ({avg_conf:.2f})")
 
+            # 전체 평균 신뢰도 계산
             confs = [r.get("avg_conf", 0.0) for r in results]
             overall_conf = sum(confs) / len(confs)
             print(f"📈 전체 평균 OCR 신뢰도: {overall_conf:.2f}")
 
-            # ----------------------------------------------------------
-            # ⑤ 선명도 + 신뢰도 판단
-            # ----------------------------------------------------------
+            # 품질 판정
             if def_score < definition_threshold:
                 print(f"⚠️ 이미지가 다소 흐립니다. (Definition {def_score:.2f} < {definition_threshold})")
             elif overall_conf < conf_threshold:
@@ -159,9 +171,9 @@ def start_camera_ocr() -> None:
             else:
                 print("✅ 선명도와 인식률 모두 양호합니다.")
 
-    # ----------------------------------------------------------
-    # 종료 처리
-    # ----------------------------------------------------------
+    # ------------------------------------------------------
+    # 5. 종료 처리
+    # ------------------------------------------------------
     cap.release()
     cv2.destroyAllWindows()
     print("🟢 종료되었습니다.")
