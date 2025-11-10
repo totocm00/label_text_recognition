@@ -1,0 +1,20 @@
+# ==========================================================
+# label_text_recognition 패키지가 공통으로 참조하는 설정 파일입니다.
+# 여기서 값만 바꾸면 카메라, 해상도, 언어, 출력 경로가 한 번에 바뀝니다.
+# ==========================================================
+
+camera_index: 0
+frame_width: 960
+frame_height: 540
+
+# PaddleOCR에서 동시에 로드할 언어 목록
+ocr_langs:
+  - en
+  - korean
+
+# 결과 저장 경로
+output_dir_images: "assets/pictures"
+output_dir_json: "assets/json"
+
+# OCR 결과 필터링 임계값
+conf_threshold: 0.5
